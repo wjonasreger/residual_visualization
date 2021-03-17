@@ -1,0 +1,222 @@
+---
+title: "Regression and Residuals Visualization"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r}
+library(MASS)
+```
+
+```{r}
+get_stat = function(df){
+  X = df[,1]
+  Y = df[,2]
+  mx = mean(X)
+  my = mean(Y)
+  sx = sd(X)
+  sy = sd(Y)
+  r = cor(X, Y)
+  m = sy/sx*r
+  b = my-m*mx
+  return(c(m, b))
+}
+
+APR = function(X, Y, m, b){
+  actual = Y
+  predicted = m*X + b
+  residuals = actual - predicted
+  absres = abs(residuals)
+  return(data.frame(X, Y, actual, predicted, residuals, absres))
+}
+
+rdist = function(r, n, xp, yp, rs){
+  set.seed(rs)
+  
+  cov = xp[2]*yp[2]*r
+  mu = c(xp[1], yp[1])
+  Sig = matrix(c(xp[2]^2, cov, cov, yp[2]^2), ncol=2)
+  dist = mvrnorm(n, mu, Sig, empirical = TRUE)
+  X = dist[,1]
+  Y = dist[,2]
+  
+  m_b = get_stat(dist)
+  m = m_b[1]
+  b = m_b[2]
+  
+  df = APR(X, Y, m, b)
+  return(df)
+}
+```
+
+```{r}
+rplot = function(df){
+  x = df[,1]
+  y = df[,2]
+  p = df[,4]
+  plot(x, y)
+  min_idx = which.min(x)
+  max_idx = which.max(x)
+  segments(x0=min(x), x1=max(x), 
+           y0=p[min_idx], y1=p[max_idx])
+}
+
+rrplot = function(df, colors){
+  colfunc = colorRampPalette(colors)
+  x = df[,1]
+  y = df[,2]
+  p = df[,4]
+  min_idx = which.min(x)
+  max_idx = which.max(x)
+  xr = abs(max(x)-min(x))
+  yr = abs(max(y)-min(y))
+  
+  # regression plot and line
+  plot(x, y, ylim=c(min(y), max(y)+yr*0.2), 
+       xlim=c(min(x)-xr*0.05, max(x)+xr*0.3), pch=19, cex=0.7)
+  segments(x0=min(x), x1=max(x), 
+           y0=p[min_idx], y1=p[max_idx])
+  df = df[order(df$absres), ]
+  
+  # generate fit lines
+  c = colfunc(length(x))
+  for (i in 1:length(x)){
+    segments(x0=df[i,1], x1=df[i,1], y0=df[i,3], y1=df[i,4], col=c[i], lwd=2)
+  }
+  
+  # Average residual components
+  points(rep(max(x)+xr*0.1, 2), c(max(y), max(y)-mean(df$absres)), pch=19, cex=0.7)
+  segments(x0=max(x)+xr*0.1, x1=max(x)+xr*0.1, y0=max(y), y1=max(y)-mean(df$absres), 
+           col=c[round(length(x)/2)], lwd=2)
+  text(max(x)+xr*0.225, mean(c(max(y), max(y)-mean(df$absres))), paste("Average AV\n Residual\n", round(mean(df$absres), 5)))
+  
+  # Fit label components
+  points(seq(min(x), max(x), by = (max(x)-min(x))/(length(x)-1)), 
+         rep(max(y)+yr*0.1, length(x)), col=c, pch=19) # color gradient
+  segments(x0=min(x)-xr*0.025, x1=max(x)+xr*0.025, 
+           y0=max(y)+yr*0.15, y1=max(y)+yr*0.15) # horizontal bar
+  xbinw = abs((max(x)+xr*0.025) - (min(x)-xr*0.025))/3 # bin widths
+  xbin0 = min(x)-xr*0.025 # bin start point
+  xbin = xbin0 + xbinw*0:3 # bin division points
+  segments(x0=xbin[1], x1=xbin[1], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  segments(x0=xbin[2], x1=xbin[2], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  segments(x0=xbin[3], x1=xbin[3], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  segments(x0=xbin[4], x1=xbin[4], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  text(xbin[1]+xbinw/2, max(y)+yr*0.18, "Loose")
+  text(xbin[2]+xbinw/2, max(y)+yr*0.18, "Fit")
+  text(xbin[3]+xbinw/2, max(y)+yr*0.18, "Tight")
+}
+
+rrplot2 = function(df, colors, m_b, pt){
+  colfunc = colorRampPalette(colors)
+  m = m_b[1]
+  b = m_b[2]
+  x = c(df[,1], pt[1])
+  y = c(df[,2], pt[2])
+  m_b2 = get_stat(data.frame(x, y))
+  
+  df2 = APR(x, y, m_b2[1], m_b2[2])
+  
+  p = df2[,4]
+  min_idx = which.min(x)
+  max_idx = which.max(x)
+  xr = abs(max(x)-min(x))
+  yr = abs(max(y)-min(y))
+  
+  
+  
+  # regression plot and line
+  plot(x, y, ylim=c(min(y, p), max(y, p)+yr*0.2), 
+       xlim=c(min(x)-xr*0.05, max(x)+xr*0.3), pch=19, cex=0.7)
+  segments(x0=min(x), x1=max(x), 
+           y0=p[min_idx], y1=p[max_idx])
+  df2 = df2[order(df2$absres), ]
+  
+  # generate fit lines
+  c = colfunc(length(x))
+  for (i in 1:length(x)){
+    segments(x0=df2[i,1], x1=df2[i,1], y0=df2[i,3], y1=df2[i,4], col=c[i], lwd=2)
+  }
+  
+  segments(x0=min(x), x1=max(x), 
+           y0=m*min(x)+b, y1=m*max(x)+b, lty=2)
+  
+  # Average residual components
+  points(rep(max(x)+xr*0.1, 2), c(max(y), max(y)-mean(df$absres)), pch=19, cex=0.7)
+  segments(x0=max(x)+xr*0.1, x1=max(x)+xr*0.1, y0=max(y), y1=max(y)-mean(df$absres), 
+           col=c[round(length(x)/2)], lwd=2)
+  text(max(x)+xr*0.225, mean(c(max(y), max(y)-mean(df2$absres))), paste("Average AV\n Residual\n", round(mean(df2$absres), 5)))
+  
+  # added x, y coordinate label
+  text(max(x)+xr*0.225, (max(y)-min(y))/2 + min(y), paste("n = ", length(x), "\n(", pt[1], ", ", pt[2], ")", sep=''))
+  
+  # Fit label components
+  points(seq(min(x), max(x), by = (max(x)-min(x))/(length(x)-1)), 
+         rep(max(y)+yr*0.1, length(x)), col=c, pch=19) # color gradient
+  segments(x0=min(x)-xr*0.025, x1=max(x)+xr*0.025, 
+           y0=max(y)+yr*0.15, y1=max(y)+yr*0.15) # horizontal bar
+  xbinw = abs((max(x)+xr*0.025) - (min(x)-xr*0.025))/3 # bin widths
+  xbin0 = min(x)-xr*0.025 # bin start point
+  xbin = xbin0 + xbinw*0:3 # bin division points
+  segments(x0=xbin[1], x1=xbin[1], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  segments(x0=xbin[2], x1=xbin[2], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  segments(x0=xbin[3], x1=xbin[3], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  segments(x0=xbin[4], x1=xbin[4], 
+           y0=max(y)+yr*0.1, y1=max(y)+yr*0.15)
+  text(xbin[1]+xbinw/2, max(y)+yr*0.18, "Loose")
+  text(xbin[2]+xbinw/2, max(y)+yr*0.18, "Fit")
+  text(xbin[3]+xbinw/2, max(y)+yr*0.18, "Tight")
+}
+```
+
+# Visualization Code
+
+This is a visualization of how regression lines and residuals are related. "Looseness" and "Tightness" of a string or rubber band is the analogy being used with the residuals (i.e. red residual lines are the most "stretched" or "tight" lines as they are furthest from the regression line and are "pulling" the most). It is useful to think that each point has equal length of string or rubber band. 
+
+This is mainly to help students visualize how the regression line represents a balance or equilibrium of the residuals for all of the points with respect to the regression line (i.e. compare the color balance on either side of the regression line). However, these plots are also useful for seeing how different outliers might influence the regression line. For instance, some outliers are outliers w.r.t x values but may be very close to the regression line, while others may be outliers w.r.t to y values and may be very far from the regression line. Another thing to notice is how the sample size relates to the influence of an outlier (i.e. outliers have more influence on the regression line with smaller sample sizes).
+
+```{r, fig.width=7, fig.height=4.5, echo=T}
+colors = c("green", "blue", "purple", "red")
+xpt = c(140, 190)
+ypt = c(150, 240)
+n = c(5, 25, 100)
+
+for (k in 1:length(n)){
+  df = rdist(r=0.8, n=n[k], xp=c(190, 10), yp=c(190, 10), rs=1)
+  m_b = get_stat(df)
+  rplot(df)
+  rrplot(df, colors)
+  for(i in 1:length(xpt)){
+    for(j in 1:length(ypt)){
+      rrplot2(df, colors, m_b, pt = c(xpt[i], ypt[j]))
+    }
+  }
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
